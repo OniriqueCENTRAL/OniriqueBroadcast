@@ -22,7 +22,7 @@ jobs:
           cmake --build build --config Release
       - name: Tests
         shell: bash
-        run: find build -name "OniriqueBroadcastTests.exe" -path "*Release*" | head -1 | xargs -I{} "{}"
+        run: ./build/OniriqueBroadcastTests_artefacts/Release/OniriqueBroadcastTests.exe
       - name: Empaqueter
         shell: bash
         run: |
