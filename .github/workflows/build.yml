@@ -1,0 +1,53 @@
+name: Build
+
+# À chaque envoi sur main : compile l'application (Windows uniquement : elle s'appuie sur un câble audio
+# virtuel Windows et WASAPI), passe les tests, puis publie la version dans ONIRIQUE CENTRAL.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  PRODUCT: ONIRIQUE BROADCAST
+  SLUG: onirique-broadcast
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compiler
+        run: |
+          cmake -B build
+          cmake --build build --config Release
+      - name: Tests
+        shell: bash
+        run: find build -name "OniriqueBroadcastTests.exe" -path "*Release*" | head -1 | xargs -I{} "{}"
+      - name: Empaqueter
+        shell: bash
+        run: |
+          mkdir -p dist/win
+          cp "build/OniriqueBroadcast_artefacts/Release/$PRODUCT.exe" dist/win/
+      - uses: actions/upload-artifact@v4
+        with: { name: win, path: dist/win }
+
+  publish:
+    needs: [windows]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: win, path: version/win }
+      - name: Publier dans ONIRIQUE CENTRAL
+        env:
+          CLE: ${{ secrets.ONIRIQUE_PUBLISH_KEY }}
+          MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          if [ -z "$CLE" ]; then echo "Secret ONIRIQUE_PUBLISH_KEY absent : rien n'est publié."; exit 0; fi
+          printf '%s\n' "$MESSAGE" | head -c 4000 > version/notes.txt
+          mkdir -p ~/.ssh
+          printf '%s\n' "$CLE" > ~/.ssh/publish && chmod 600 ~/.ssh/publish
+          # clé du serveur épinglée (SHA256:s17azxD9lgapSvGarqB34msuvdMJLWvFV7ptd79FZsc)
+          echo "217.160.106.244 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICV3xBScmxJy34Jgjtvb0R4UCG3jmzkSU+/T1lDrvD/l" >> ~/.ssh/known_hosts
+          ls -R version
+          tar -C version -cf - . | ssh -i ~/.ssh/publish -o IdentitiesOnly=yes -o BatchMode=yes livraison@217.160.106.244 "publish $SLUG"
