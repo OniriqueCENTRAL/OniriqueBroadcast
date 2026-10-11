@@ -200,6 +200,31 @@ std::unique_ptr<juce::AudioIODevice> AudioRouter::openDevice (juce::AudioIODevic
     return d;
 }
 
+// Micro virtuel : un câble virtuel est ouvert en mode EXCLUSIF. Le son va directement au pilote du câble, sans passer
+// par le mélangeur de Windows : aucune capture du son du PC (partage d'écran Discord avec son, OBS "son du bureau",
+// enregistreurs...) ne peut le voir, donc la voix ne repart jamais une deuxième fois en écho dans un partage d'écran.
+// Elle n'existe plus que là où elle doit être : dans le micro virtuel. Aucune autre application ne peut non plus
+// jouer dans le câble pendant ce temps. Si le pilote refuse (ou si la sortie n'est pas un câble), mode habituel.
+void AudioRouter::openVirtualOutput()
+{
+    outputExclusive = false;
+    // diagnostic uniquement : ONIRIQUE_SHARED_OUTPUT=1 garde l'ancien comportement (comparaisons de capture)
+    const bool forceShared = juce::SystemStats::getEnvironmentVariable ("ONIRIQUE_SHARED_OUTPUT", {}) == "1";
+    if (isVirtualCable (config.output) && ! forceShared)
+    {
+        if (auto* ex = typeFor (exclusive))
+        {
+            // tampon court par défaut (5 ms) : en exclusif le pilote du câble le permet, la latence baisse d'autant
+            juce::String err;
+            outDev = openDevice (*ex, config.output, false, config.bufferSize > 0 ? config.bufferSize : 240, err);
+            if (outDev == nullptr && config.bufferSize <= 0)
+                outDev = openDevice (*ex, config.output, false, 0, err);
+            if (outDev != nullptr) { outputExclusive = true; status.output.error.clear(); return; }
+        }
+    }
+    outDev = openDevice (*typeFor (config.mode), config.output, false, config.bufferSize, status.output.error);
+}
+
 void AudioRouter::closeAll()
 {
     // le producteur (micro) d'abord, puis les consommateurs
@@ -221,8 +246,8 @@ void AudioRouter::openAll()
     }
 
     inDev = openDevice (*t, config.input, true, config.bufferSize, status.input.error);
-    outDev = openDevice (*t, config.output, false, config.bufferSize, status.output.error);
-    if (config.monitor.isNotEmpty() && config.monitor == config.output && config.mode == exclusive)
+    openVirtualOutput();
+    if (config.monitor.isNotEmpty() && config.monitor == config.output && (config.mode == exclusive || outputExclusive))
         status.monitor.error = "Already used by the virtual mic (exclusive mode)";
     else
         monDev = openDevice (*sharedType, config.monitor, false, 0, status.monitor.error);
@@ -275,6 +300,7 @@ AudioRouter::Status AudioRouter::getStatus() const
     };
     fill (s.input, inDev.get(), config.input);
     fill (s.output, outDev.get(), config.output);
+    s.output.exclusive = outDev != nullptr && outputExclusive;
     fill (s.monitor, monDev.get(), config.monitor);
 
     if (inDev != nullptr && outDev != nullptr)
@@ -313,7 +339,7 @@ void AudioRouter::timerCallback()
         const bool inLost = lost (config.input, inDev) && ins.contains (config.input);
         const bool outLost = lost (config.output, outDev) && outs.contains (config.output);
         const bool monLost = lost (config.monitor, monDev) && outs.contains (config.monitor)
-                             && ! (config.monitor == config.output && config.mode == exclusive);
+                             && ! (config.monitor == config.output && (config.mode == exclusive || outputExclusive));
 
         if (inLost)
         {
@@ -329,7 +355,7 @@ void AudioRouter::timerCallback()
             if (outLost)
             {
                 if (outDev != nullptr) { outDev->stop(); outDev->close(); outDev.reset(); }
-                outDev = openDevice (*typeFor (config.mode), config.output, false, config.bufferSize, status.output.error);
+                openVirtualOutput();
                 if (outDev != nullptr)
                 {
                     virtualBridge.prepare (inRate, outDev->getCurrentSampleRate(), inBlock, outDev->getCurrentBufferSizeSamples());

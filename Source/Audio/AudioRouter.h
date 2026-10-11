@@ -44,6 +44,7 @@ public:
     struct Stream
     {
         bool active = false;          // ouvert et en cours de lecture
+        bool exclusive = false;       // micro virtuel en mode exclusif : invisible pour les captures du son du PC
         juce::String name, error;
         double rate = 0.0;
         int block = 0, channels = 0;
@@ -90,6 +91,8 @@ private:
     juce::AudioIODeviceType* typeFor (int mode);
     void closeAll();
     void openAll();
+    void openVirtualOutput();
+    bool outputExclusive = false;
     std::unique_ptr<juce::AudioIODevice> openDevice (juce::AudioIODeviceType&, const juce::String& name, bool isInput,
                                                      int bufferSize, juce::String& error);
 

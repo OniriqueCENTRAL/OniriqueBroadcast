@@ -332,6 +332,8 @@ struct ProcessLoopback
     void (*callback) (void*, const float*, int) = nullptr;
     void* ctx = nullptr;
     int rate = 48000;
+    DWORD pid = 0;
+    bool include = false;   // false : tout sauf ce processus ; true : uniquement ce processus
 
     void run()
     {
@@ -342,8 +344,9 @@ struct ProcessLoopback
 
         AUDIOCLIENT_ACTIVATION_PARAMS params {};
         params.ActivationType = AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK;
-        params.ProcessLoopbackParams.TargetProcessId = GetCurrentProcessId();
-        params.ProcessLoopbackParams.ProcessLoopbackMode = PROCESS_LOOPBACK_MODE_EXCLUDE_TARGET_PROCESS_TREE;
+        params.ProcessLoopbackParams.TargetProcessId = pid;
+        params.ProcessLoopbackParams.ProcessLoopbackMode = include ? PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE
+                                                                   : PROCESS_LOOPBACK_MODE_EXCLUDE_TARGET_PROCESS_TREE;
         PROPVARIANT pv {};
         pv.vt = VT_BLOB;
         pv.blob.cbSize = sizeof (params);
@@ -417,6 +420,7 @@ ProcessLoopback* startProcessLoopback (void (*callback) (void*, const float*, in
     lb->callback = callback;
     lb->ctx = ctx;
     lb->rate = sampleRate;
+    lb->pid = GetCurrentProcessId();
     lb->thread = std::thread ([lb] { lb->run(); });
     return lb;
 }
@@ -429,4 +433,17 @@ void stopProcessLoopback (ProcessLoopback* lb)
     lb->stop = true;
     if (lb->thread.joinable()) lb->thread.join();
     delete lb;
+}
+
+// capture du son d'UN processus (et de ses enfants), comme le partage d'écran de Discord : sert aux vérifications
+ProcessLoopback* startProcessCapture (unsigned long processId, void (*callback) (void*, const float*, int), void* ctx, int sampleRate)
+{
+    auto* lb = new ProcessLoopback();
+    lb->callback = callback;
+    lb->ctx = ctx;
+    lb->rate = sampleRate;
+    lb->pid = (DWORD) processId;
+    lb->include = true;
+    lb->thread = std::thread ([lb] { lb->run(); });
+    return lb;
 }

@@ -82,14 +82,9 @@ BridgeResult runBridge (double inRate, double outRate, int inBlock, int outBlock
             if (nextOut > 12.0)
             {
                 underAfterSettle += br.getUnderruns() - before;
-                if (br.getUnderruns() != before && std::getenv ("BRIDGE_DEBUG") != nullptr)
-                    std::printf ("    underrun t=%.2f margin=%.2f ms fillErr=%.1f corr=%.0f ppm\n",
-                                 nextOut, br.getMarginMs(), br.getFillError(), br.getCorrectionPpm());
                 if (nextOut > 30.0) maxErr = std::max (maxErr, std::abs (br.getFillError()));
             }
             if (nextOut > seconds - 2.0) captured.insert (captured.end(), out.begin(), out.end());
-            if (std::getenv ("BRIDGE_TRACE") != nullptr && outBlock == 1024 && (outCount % 47) == 0 && nextOut < 20.0)
-                std::printf ("    t=%.1f %s\n", nextOut, br.debugState().toRawUTF8());
             nextOut = outOffset + (double) (++outCount) * outBlock / realOut + jitter();
         }
     }
@@ -359,9 +354,34 @@ void testEchoGuard()
            "no leak (isolated headphones): guard stays idle, output identical");
 }
 
-int main()
+// --capture <pid> <secondes> : capture le son d'un processus comme le partage d'écran de Discord, et l'analyse
+int captureProcess (unsigned long pid, double seconds)
+{
+    struct Acc { std::atomic<double> energy { 0.0 }; std::atomic<long long> samples { 0 }; std::atomic<float> peak { 0.0f }; } acc;
+    auto* lb = startProcessCapture (pid, [] (void* ctx, const float* x, int n)
+    {
+        auto& a = *static_cast<Acc*> (ctx);
+        double e = 0.0;
+        float pk = a.peak.load();
+        for (int i = 0; i < n; ++i) { e += (double) x[i] * x[i]; pk = std::max (pk, std::abs (x[i])); }
+        a.energy = a.energy.load() + e;
+        a.samples = a.samples.load() + n;
+        a.peak = pk;
+    }, &acc, 48000);
+    juce::Thread::sleep ((int) (seconds * 1000.0));
+    const bool ok = isProcessLoopbackRunning (lb);
+    stopProcessLoopback (lb);
+    const double rms = acc.samples.load() > 0 ? std::sqrt (acc.energy.load() / (double) acc.samples.load()) : 0.0;
+    std::printf ("capture of process %lu for %.1f s: capture running=%d, %lld samples, RMS %.1f dBFS, peak %.1f dBFS\n", pid, seconds, (int) ok,
+                 acc.samples.load(), rms > 0.0 ? 20.0 * std::log10 (rms) : -999.0, acc.peak.load() > 0.0f ? 20.0 * std::log10 (acc.peak.load()) : -999.0);
+    return 0;
+}
+
+int main (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI init;
+    if (argc >= 4 && juce::String (argv[1]) == "--capture")
+        return captureProcess ((unsigned long) juce::String (argv[2]).getLargeIntValue(), juce::String (argv[3]).getDoubleValue());
     testPlatform();
     testEchoGuard();
     testBridge();

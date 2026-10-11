@@ -129,7 +129,8 @@ MainComponent::MainComponent (BroadcastEngine& e, AudioRouter& r, juce::Properti
     bypassButton.setTooltip ("Bypass all the effects: the virtual mic receives your raw microphone.");
     muteAtt = std::make_unique<ButtonAttachment> (engine.apvts, ids::mute, muteButton);
     bypassAtt = std::make_unique<ButtonAttachment> (engine.apvts, ids::bypass, bypassButton);
-    monitorToggle.setTooltip ("Hear the processed voice in your headphones (what the apps receive).");
+    monitorToggle.setTooltip ("Hear the processed voice in your headphones (what the apps receive). Note: like any sound played "
+                              "by the PC, this monitor can be picked up by a Discord screen share with sound - the virtual mic itself never is.");
     monitorAtt = std::make_unique<ButtonAttachment> (engine.apvts, ids::monOn, monitorToggle);
     limToggle.setTooltip ("Output limiter: guarantees the virtual mic never clips.");
     limAtt = std::make_unique<ButtonAttachment> (engine.apvts, ids::limOn, limToggle);
@@ -967,8 +968,9 @@ void MainComponent::paintRouting (juce::Graphics& g)
         {
             head = formatOk ? "ONLINE" : "ONLINE - NOT 48 KHZ";
             headCol = formatOk ? ui::live : ui::ember.interpolatedWith (ui::bone, 0.3f);
-            line1 = formatOk ? "In Discord, OBS, games... choose the mic:"
-                             : "Click SET 48 KHZ for clean Discord audio:";
+            line1 = ! formatOk ? "Click SET 48 KHZ for clean Discord audio:"
+                  : ! status.output.exclusive ? "Shared mode: screen shares may echo you."
+                  : "In Discord, OBS, games... choose the mic:";
             line2 = recordingName;
         }
 
@@ -1010,7 +1012,7 @@ void MainComponent::paintRouting (juce::Graphics& g)
         {
             if (s.name.isEmpty()) return juce::String ("-");
             if (! s.active) return juce::String ("offline");
-            return juce::String (s.rate / 1000.0, 1) + " kHz  /  " + juce::String (s.block) + " smp";
+            return juce::String (s.rate / 1000.0, 1) + " kHz  /  " + juce::String (s.block) + " smp" + (s.exclusive ? "  EXCL" : "");
         };
         const auto st = router.getStatus();
         rowText (0, "MIC", stream (st.input), st.input.active ? ui::mist : ui::ember);

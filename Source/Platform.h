@@ -18,3 +18,4 @@ struct ProcessLoopback;
 ProcessLoopback* startProcessLoopback (void (*callback) (void* ctx, const float* mono, int numSamples), void* ctx, int sampleRate);
 bool isProcessLoopbackRunning (ProcessLoopback*);
 void stopProcessLoopback (ProcessLoopback*);
+ProcessLoopback* startProcessCapture (unsigned long processId, void (*callback) (void* ctx, const float* mono, int numSamples), void* ctx, int sampleRate);

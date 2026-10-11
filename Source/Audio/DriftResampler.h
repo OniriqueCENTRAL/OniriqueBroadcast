@@ -170,7 +170,6 @@ public:
     // ---- mesures (n'importe quel thread, indicatives)
     double getTargetLatencyMs() const noexcept { return 1000.0 * target / inRate; }
     double getMarginMs() const noexcept        { return 1000.0 * marginSec; }
-    juce::String debugState() const { return "fillAvg=" + juce::String (fillAvg, 1) + " target=" + juce::String (target, 1) + " integ=" + juce::String (integ * 1e6, 0) + " corr=" + juce::String (corr * 1e6, 0) + " minHead=" + juce::String (minHeadroom, 0) + " primed=" + juce::String ((int) primed); }
     double getCorrectionPpm() const noexcept   { return corr * 1.0e6; }
     double getFillError() const noexcept       { return fillAvg - target; }
     int getUnderruns() const noexcept          { return underruns.load (std::memory_order_relaxed); }

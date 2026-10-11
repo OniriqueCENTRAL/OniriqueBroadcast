@@ -27,6 +27,12 @@ Si aucun câble n'est installé, **INSTALL VB-CABLE (FREE)** fait tout : téléc
 vérification de la signature Authenticode de l'éditeur de VB-Audio (sinon rien n'est exécuté), installation silencieuse
 avec l'autorisation administrateur de Windows, sélection automatique du câble, réglage en 48 kHz, proposition de redémarrage.
 
+**Partage d'écran Discord** : la sortie vers le câble virtuel est ouverte en **mode exclusif** (EXCL dans AUDIO ENGINE) : elle
+ne passe pas par le mélangeur de Windows, donc aucune capture du son du PC (partage d'écran avec son, son du bureau d'OBS)
+ne peut la reprendre. Mesuré : capture du processus en mode partagé -38 dBFS (la voix repartait en écho), en exclusif
+silence numérique. Diagnostic : ONIRIQUE_SHARED_OUTPUT=1 rétablit le mode partagé ;
+`OniriqueBroadcastTests.exe --capture <pid> <s>` capture un processus comme le fait Discord.
+
 **Discord** : le micro virtuel doit être en 48 kHz des deux côtés du câble (fréquence de Discord) ; sinon Windows
 rééchantillonne la voix avant Discord, ce qui dégrade sa suppression d'écho et de bruit. L'application le vérifie
 en permanence et propose **SET 48 KHZ** (comme Propriétés > Avancé > Format par défaut du panneau Son).
