@@ -82,6 +82,7 @@ private:
     BroadcastEngine& engine;
     AudioRouter& router;
     juce::PropertiesFile& settings;
+    onirique::ui::FontScope fontScope;   // polices de la charte, le temps que la fenêtre est ouverte
     OniriqueLookAndFeel lnf;
     juce::TooltipWindow tooltipWindow { this, 600 };
 

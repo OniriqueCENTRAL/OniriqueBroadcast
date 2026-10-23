@@ -38,7 +38,8 @@ target_sources(OniriqueBroadcast PRIVATE
     Source/UI/Widgets.cpp
     Source/UI/Displays.cpp)
 
-juce_add_binary_data(OniriqueBroadcastAssets SOURCES Resources/logo.png)
+juce_add_binary_data(OniriqueBroadcastAssets SOURCES Resources/logo.png
+    Resources/Unbounded800.ttf Resources/HankenGrotesk600.ttf Resources/JetBrainsMono500.ttf Resources/JetBrainsMono600.ttf)
 
 target_include_directories(OniriqueBroadcast PRIVATE Source)
 

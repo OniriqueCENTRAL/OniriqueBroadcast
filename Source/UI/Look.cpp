@@ -1,4 +1,6 @@
 #include "Look.h"
+#include "OniriqueKnob.h"
+#include <BinaryData.h>
 
 using namespace onirique;
 
@@ -8,10 +10,43 @@ constexpr float kPi = juce::MathConstants<float>::pi;
 }
 
 //==============================================================================
+namespace
+{
+// les polices de la charte, partagées par les fenêtres ouvertes (thread de l'interface uniquement)
+struct Faces
+{
+    juce::Typeface::Ptr display, body, mono, monoBold;
+};
+Faces* faces = nullptr;
+int faceUsers = 0;
+} // namespace
+
+ui::FontScope::FontScope()
+{
+    if (faceUsers++ == 0)
+    {
+        faces = new Faces();
+        faces->display = juce::Typeface::createSystemTypefaceFor (BinaryData::Unbounded800_ttf, BinaryData::Unbounded800_ttfSize);
+        faces->body = juce::Typeface::createSystemTypefaceFor (BinaryData::HankenGrotesk600_ttf, BinaryData::HankenGrotesk600_ttfSize);
+        faces->mono = juce::Typeface::createSystemTypefaceFor (BinaryData::JetBrainsMono500_ttf, BinaryData::JetBrainsMono500_ttfSize);
+        faces->monoBold = juce::Typeface::createSystemTypefaceFor (BinaryData::JetBrainsMono600_ttf, BinaryData::JetBrainsMono600_ttfSize);
+    }
+}
+
+ui::FontScope::~FontScope()
+{
+    if (--faceUsers == 0) { delete faces; faces = nullptr; }
+}
+
 juce::Font ui::font (Face f, float h, bool bold, float kerning)
 {
-    static const char* names[] { "Bahnschrift", "Segoe UI", "Cascadia Mono" };
-    juce::Font fnt (juce::FontOptions (names[(int) f], std::max (4.0f, h), bold ? juce::Font::bold : juce::Font::plain));
+    h = std::max (4.0f, h);
+    const juce::Typeface::Ptr tf = faces == nullptr ? nullptr
+                                 : f == Face::display ? faces->display : f == Face::body ? faces->body : (bold ? faces->monoBold : faces->mono);
+    // Unbounded est très large : un peu plus petit que la hauteur demandée, pour garder les mêmes encombrements
+    juce::Font fnt = tf != nullptr ? juce::Font (juce::FontOptions (tf).withHeight (f == Face::display ? h * 0.86f : h))
+                                   : juce::Font (juce::FontOptions (f == Face::display ? "Bahnschrift" : f == Face::body ? "Segoe UI" : "Cascadia Mono",
+                                                                    h, bold ? juce::Font::bold : juce::Font::plain));
     if (kerning != 0.0f) fnt.setExtraKerningFactor (kerning);
     return fnt;
 }
@@ -124,56 +159,8 @@ void OniriqueLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int
     const float glow = (float) props.getWithDefault ("glow", 0.0f);
     const bool bipolar = (bool) props.getWithDefault ("bipolar", false);
 
-    // ---- arc de valeur : piste discrète + arc braise lumineux (depuis le centre si bipolaire)
-    const float arcR = R * 0.86f, arcW = std::max (2.5f, 7.0f * u);
-    juce::Path track;
-    track.addCentredArc (c.x, c.y, arcR, arcR, 0.0f, a0, a1, true);
-    g.setColour (juce::Colours::white.withAlpha (0.07f));
-    g.strokePath (track, juce::PathStrokeType (arcW, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
-
-    const float aPos = a0 + shown * (a1 - a0);
-    const float aFrom = bipolar ? 0.5f * (a0 + a1) : a0;
-    if (std::abs (aPos - aFrom) > 0.005f)
-    {
-        juce::Path val;
-        val.addCentredArc (c.x, c.y, arcR, arcR, 0.0f, std::min (aFrom, aPos), std::max (aFrom, aPos), true);
-        strokeGlow (g, val, ember, arcW, 0.55f + 0.45f * glow);
-        g.setGradientFill (juce::ColourGradient (bone, onCircle (c, arcR, aFrom), ember, onCircle (c, arcR, aPos), false));
-        g.strokePath (val, juce::PathStrokeType (arcW, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
-    }
-
-    // ---- corps : sphère sombre teintée sang, reflet en haut à gauche
-    const float bodyR = R * 0.66f;
-    const auto body = juce::Rectangle<float> (bodyR * 2.0f, bodyR * 2.0f).withCentre (c);
-    juce::Path bodyPath;
-    bodyPath.addEllipse (body);
-    juce::DropShadow (juce::Colours::black.withAlpha (0.65f), juce::roundToInt (16.0f * u), { 0, juce::roundToInt (7.0f * u) })
-        .drawForPath (g, bodyPath);
-
-    g.setGradientFill (juce::ColourGradient (juce::Colour (0xff3d282b), c.x - bodyR * 0.45f, c.y - bodyR * 0.55f,
-                                             juce::Colour (0xff0e0708), c.x + bodyR * 0.75f, c.y + bodyR * 0.95f, true));
-    g.fillEllipse (body);
-    g.setColour (night);
-    g.drawEllipse (body, std::max (1.0f, 1.6f * u));
-    g.setColour (juce::Colours::white.withAlpha (0.09f + 0.06f * glow));
-    g.drawEllipse (body.reduced (1.4f * u), std::max (0.8f, 1.1f * u));
-
-    const auto face = body.reduced (bodyR * 0.16f);
-    g.setGradientFill (juce::ColourGradient (juce::Colour (0xff2a1a1d), face.getX(), face.getY(),
-                                             juce::Colour (0xff120a0b), face.getRight(), face.getBottom(), false));
-    g.fillEllipse (face);
-    g.setColour (juce::Colours::white.withAlpha (0.04f));
-    g.drawEllipse (face, std::max (0.8f, 1.0f * u));
-
-    // ---- repère + point lumineux en bout
-    juce::Path p;
-    p.startNewSubPath (onCircle (c, bodyR * 0.30f, aPos));
-    p.lineTo (onCircle (c, bodyR * 0.78f, aPos));
-    g.setColour (mist);
-    g.strokePath (p, juce::PathStrokeType (std::max (2.0f, 4.0f * u), juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
-    const auto tip = onCircle (c, bodyR * 0.78f, aPos);
-    g.setColour (ember.withAlpha (0.35f * glow));
-    g.fillEllipse (juce::Rectangle<float> (14.0f * u, 14.0f * u).withCentre (tip));
+    // ---- le potard ONIRIQUE « RONCE », le même que dans les plugins (UI/OniriqueKnob.h)
+    onirique::ui::drawKnob (g, juce::Rectangle<float> (D, D).withCentre (c), shown, a0, a1, ember, bipolar, glow > 0.3f);
 
     // ---- bornes de l'échelle
     const auto minL = props["minLabel"].toString(), maxL = props["maxLabel"].toString();

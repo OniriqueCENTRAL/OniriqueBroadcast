@@ -230,7 +230,7 @@ private:
         {
             using namespace onirique;
             g.fillAll (ui::night);
-            g.setGradientFill (juce::ColourGradient (ui::blood.withAlpha (0.85f), 0.0f, (float) main->getY(),
+            g.setGradientFill (juce::ColourGradient (ui::blood.withAlpha (0.45f), 0.0f, (float) main->getY(),
                                                      ui::night.withAlpha (0.0f), 0.0f, (float) main->getY() + (float) main->getHeight() * 0.62f, false));
             g.fillRect (getLocalBounds().withTop (main->getY()));
         }
@@ -335,6 +335,7 @@ private:
         }
 
         OniriqueBroadcastApp& app;
+        onirique::ui::FontScope fontScope;   // polices de la charte, le temps que la fenêtre est ouverte
         OniriqueLookAndFeel lnf;
         juce::Rectangle<int> restoreBounds;
         juce::ComponentDragger dragger;
@@ -386,6 +387,7 @@ private:
 
     private:
         OniriqueBroadcastApp& app;
+        onirique::ui::FontScope fontScope;   // polices de la charte, le temps que la fenêtre est ouverte
         OniriqueLookAndFeel lnf;
     };
 

@@ -840,13 +840,10 @@ void MainComponent::paintHeader (juce::Graphics& g)
         const float w2 = ui::textWidth (f2, "BROADCAST") + 2.0f;
         const float y = 12.0f * u, hh = 36.0f * u;
         g.setFont (f1);
-        g.setColour (ui::ember.withAlpha (0.35f));
-        g.drawText ("ONIRIQUE", juce::Rectangle<float> (x, y + 1.0f * u, w1, hh), juce::Justification::centredLeft, false);
         g.setColour (ui::mist);
         g.drawText ("ONIRIQUE", juce::Rectangle<float> (x, y, w1, hh), juce::Justification::centredLeft, false);
-        g.setFont (f2);
-        g.setColour (ui::haze);
-        g.drawText ("BROADCAST", juce::Rectangle<float> (x + w1 + 10.0f * u, y, w2, hh), juce::Justification::centredLeft, false);
+        g.setColour (ui::ember);
+        g.drawText ("BROADCAST", juce::Rectangle<float> (x + w1 + 10.0f * u, y, w2 + 30.0f * u, hh), juce::Justification::centredLeft, false);
         g.setColour (ui::haze.withAlpha (0.7f));
         g.setFont (ui::font (ui::Face::mono, 10.0f * u, false, 0.12f));
         g.drawText ("REAL-TIME VOICE CHAIN + VIRTUAL MIC", juce::Rectangle<float> (x + w1 + w2 + 22.0f * u, y + 4.0f * u, 300.0f * u, hh),
@@ -1030,13 +1027,21 @@ void MainComponent::paint (juce::Graphics& g)
     const float u = scale();
     const float W = (float) getWidth(), H = (float) getHeight();
 
-    // ---- fond : sang -> nuit, halo braise en haut à droite
+    // ---- fond (DA PRO SERIES) : noir profond, lueurs rouges très discrètes, grain fin
     g.fillAll (ui::night);
-    g.setGradientFill (juce::ColourGradient (ui::blood.withAlpha (0.85f), 0.0f, 0.0f, ui::night.withAlpha (0.0f), 0.0f, H * 0.62f, false));
+    g.setGradientFill (juce::ColourGradient (ui::blood.withAlpha (0.55f), W * 0.22f, H * 0.45f, ui::night.withAlpha (0.0f), W * 0.22f + W * 0.6f, H * 0.45f, true));
     g.fillRect (getLocalBounds());
-    g.setGradientFill (juce::ColourGradient (ui::ember.withAlpha (0.20f), W * 0.74f, -40.0f * u,
-                                             ui::ember.withAlpha (0.0f), W * 0.74f + W * 0.42f, -40.0f * u, true));
+    g.setGradientFill (juce::ColourGradient (ui::blood.withAlpha (0.22f), W * 0.92f, H * 1.05f, ui::night.withAlpha (0.0f), W * 0.92f - W * 0.45f, H * 1.05f, true));
     g.fillRect (getLocalBounds());
+    {
+        juce::Random rnd (21);
+        for (int i = 0; i < 140; ++i)
+        {
+            const float x = rnd.nextFloat() * W, y = rnd.nextFloat() * H, s = (0.5f + 1.2f * rnd.nextFloat() * rnd.nextFloat()) * u;
+            g.setColour (ui::mist.withAlpha (0.03f + 0.07f * rnd.nextFloat()));
+            g.fillEllipse (x, y, s, s);
+        }
+    }
 
     {
         juce::Graphics::ScopedSaveState ss (g);
@@ -1046,17 +1051,18 @@ void MainComponent::paint (juce::Graphics& g)
     // ---- cartes : verre sombre, filet fin, ombre portée, titre + point braise
     auto drawCard = [&] (juce::Rectangle<float> r, const juce::String& title, bool on, bool hasPower)
     {
-        const float rad = 16.0f * u;
+        // verre sombre (DA PRO SERIES) : charbon, reflet rose pâle très léger en haut, filet fin
+        const float rad = 12.0f * u;
         juce::Path card;
         card.addRoundedRectangle (r, rad);
         juce::DropShadow (juce::Colours::black.withAlpha (0.55f), juce::roundToInt (28.0f * u), { 0, juce::roundToInt (12.0f * u) })
             .drawForPath (g, card);
-        g.setGradientFill (juce::ColourGradient (ui::deep2.withAlpha (0.94f), 0.0f, r.getY(), ui::deep.withAlpha (0.96f), 0.0f, r.getBottom(), false));
+        g.setColour (ui::deep.withAlpha (0.94f));
+        g.fillPath (card);
+        g.setGradientFill (juce::ColourGradient (ui::lilac.withAlpha (0.035f), 0.0f, r.getY(), ui::lilac.withAlpha (0.0f), 0.0f, r.getY() + r.getHeight() * 0.7f, false));
         g.fillPath (card);
         g.setColour (ui::line);
         g.strokePath (card, juce::PathStrokeType (std::max (1.0f, 1.0f * u)));
-        g.setColour (juce::Colours::white.withAlpha (0.045f));
-        g.drawHorizontalLine (juce::roundToInt (r.getY() + 1.5f * u), r.getX() + rad, r.getRight() - rad);
 
         const float dot = 6.0f * u;
         const auto dotR = juce::Rectangle<float> (dot, dot).withCentre ({ r.getX() + 20.0f * u, r.getY() + 20.0f * u });
@@ -1066,8 +1072,8 @@ void MainComponent::paint (juce::Graphics& g)
         g.fillEllipse (dotR);
 
         const float maxW = r.getWidth() - (hasPower ? 90.0f : 60.0f) * u;
-        g.setColour (ui::mist.withAlpha (0.92f));
-        const auto f = ui::fitFont (ui::Face::body, 13.0f * u, maxW, title, true, 0.18f);
+        g.setColour (ui::mist);
+        const auto f = ui::fitFont (ui::Face::display, 12.5f * u, maxW, title, true, 0.06f);
         g.setFont (f);
         g.drawText (title, juce::Rectangle<float> (r.getX() + 32.0f * u, r.getY() + 9.0f * u, maxW, 22.0f * u),
                     juce::Justification::centredLeft, false);
