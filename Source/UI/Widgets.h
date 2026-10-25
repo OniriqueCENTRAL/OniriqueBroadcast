@@ -3,7 +3,6 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "Look.h"
 #include "../Parameters.h"
-#include "../PresetManager.h"
 
 // Bouton rotatif (ou curseur, Layout::fader / horizontal) complet : nom + contrôle + valeur dans une pastille.
 // L'arc lumineux suit la valeur en glissant ; il s'illumine au survol et pendant le réglage.
@@ -264,34 +263,4 @@ private:
     int dragModule = -1, hoverModule = -1;
     float dragOffset = 0.0f, dragX = 0.0f;
     bool dragMoved = false;
-};
-
-// Barre de presets (en-tête) : précédent / nom (menu) / suivant + SAVE (champ de nom intégré).
-class PresetBar : public juce::Component, public Animated
-{
-public:
-    explicit PresetBar (onirique::PresetManager&);
-
-    void paint (juce::Graphics&) override;
-    void resized() override;
-    void tick() override;
-    void mouseDown (const juce::MouseEvent&) override;
-    void mouseMove (const juce::MouseEvent&) override;
-    void mouseExit (const juce::MouseEvent&) override;
-
-private:
-    enum Zone { none = -1, prev, name, next, save };
-    Zone zoneAt (juce::Point<float>) const noexcept;
-    void showMenu();
-    void startSave();
-    void endSave (bool commit);
-
-    onirique::PresetManager& pm;
-    juce::TextEditor editor;
-    juce::Rectangle<float> zones[4];
-    juce::String shownName;
-    bool modified = false;
-    Zone hover = none;
-    float glow[4] {};
-    int frame = 0;
 };

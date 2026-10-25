@@ -3,6 +3,7 @@
 #include "UI/Displays.h"
 #include "Audio/AudioRouter.h"
 #include "Audio/CableInstaller.h"
+#include "UI/OniriqueBar.h"
 
 // Bouton d'action en pastille (COPY, GET VB-CABLE...) : lueur au survol, clic = onClick.
 class ActionPill : public juce::Component, public juce::SettableTooltipClient, public Animated
@@ -65,6 +66,8 @@ private:
     void timerCallback() override;
     float scale() const noexcept { return (float) getWidth() / onirique::ui::kBaseW; }
     void paintHeader (juce::Graphics&);
+    float titleWidth() const;
+    void paintTitle (juce::Graphics&, juce::Rectangle<float> area) const;   // le titre, dans la barre du haut (en points)
     void paintRouting (juce::Graphics&);
     void paintStar (juce::Graphics&, juce::Point<float> c, float r, float alpha);
     void selectPeqBand (int band);
@@ -88,10 +91,10 @@ private:
 
     // ---- en-tête
     ProcessingOrderBar orderBar { engine.apvts };
-    PresetBar presetBar { engine.presets };
     PillToggle muteButton { "MUTE", PillToggle::Style::big };
-    PillToggle bypassButton { "BYPASS", PillToggle::Style::small };
-    std::unique_ptr<ButtonAttachment> muteAtt, bypassAtt;
+    std::unique_ptr<ButtonAttachment> muteAtt;
+    // la barre du haut des plugins ONIRIQUE : le titre, les presets, IN (bypass), A/B, copier / coller
+    onirique::nuit::Bar bar { engine.presets, engine.apvts, "BROADCAST", {}, (int) onirique::ui::kBaseW, (int) onirique::ui::kBaseW };
 
     // ---- ROUTING
     PillMenu inputMenu { "" }, outputMenu { "" }, monitorMenu { "" }, bufferMenu { "BUFFER" };
@@ -201,10 +204,9 @@ private:
 
     std::vector<Animated*> animated;
     std::vector<Section> sections;
-    juce::Rectangle<float> routingBounds, vmStatusRect, engineInfoRect, onAirRect, overRect, signalRect, logoRect;
-    float headerTextRight = 0.0f;
+    juce::Rectangle<float> routingBounds, vmStatusRect, engineInfoRect, onAirRect, overRect, signalRect;
     juce::Rectangle<float> secTitles[4];
-    juce::Image logo, logoScaled, logoGlow;
+    juce::Image logo, logoGlow;   // le logo du titre (dans la barre) et sa lueur, qui respire
     std::vector<std::pair<juce::Point<float>, float>> stars;
     double clock = 0.0;
     int frame = 0, overHold = 0;

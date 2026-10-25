@@ -396,24 +396,17 @@ private:
 
     void restoreState()
     {
-        constexpr int kFactoryVersion = 2;   // à incrémenter quand les presets d'usine sont recalibrés
-        if (auto xml = settings->getXmlValue ("state"))
+        if (auto xml = settings->getXmlValue ("state"); xml != nullptr && xml->hasTagName (engine->apvts.state.getType()))
         {
-            if (xml->hasTagName (engine->apvts.state.getType()))
-                engine->apvts.replaceState (juce::ValueTree::fromXml (*xml));
-            engine->presets.takeSnapshot();
-
-            // presets d'usine mis à jour : un preset d'usine resté tel quel est rechargé dans sa nouvelle version
-            if (settings->getIntValue ("factoryVersion", 1) < kFactoryVersion && ! settings->getBoolValue ("presetModified", false))
-            {
-                const auto name = engine->presets.getCurrentName();
-                for (const auto& e : engine->presets.list())
-                    if (e.factory && e.name == name) engine->presets.load (e);
-            }
+            auto state = juce::ValueTree::fromXml (*xml);
+            // un état d'avant la barre du haut : le nom de son preset suit
+            if (! state.hasProperty ("preset") && state.hasProperty ("presetName"))
+                state.setProperty ("preset", state["presetName"], nullptr);
+            engine->presets.readState (state);   // le côté A/B écouté, et l'autre
+            engine->apvts.replaceState (state);
         }
         else
-            engine->presets.loadByName ("Streamer Clean");   // premier lancement : une base prête à l'emploi
-        settings->setValue ("factoryVersion", kFactoryVersion);
+            engine->presets.load ("Streamer Clean");   // premier lancement : une base prête à l'emploi
 
         // jamais muet au démarrage : le micro virtuel doit fonctionner tout de suite
         if (auto* p = engine->apvts.getParameter (onirique::ids::mute)) p->setValueNotifyingHost (0.0f);
@@ -424,9 +417,10 @@ private:
     void saveState()
     {
         if (settings == nullptr || engine == nullptr) return;
-        if (auto xml = engine->apvts.copyState().createXml())
+        auto state = engine->apvts.copyState();
+        engine->presets.writeState (state);
+        if (auto xml = state.createXml())
             settings->setValue ("state", xml.get());
-        settings->setValue ("presetModified", engine->presets.isModified());
         settings->saveIfNeeded();
     }
 

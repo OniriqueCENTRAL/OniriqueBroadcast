@@ -4,7 +4,7 @@
 #include <array>
 #include <atomic>
 #include "Parameters.h"
-#include "PresetManager.h"
+#include "StockPresets.h"
 #include "DSP/NoiseGate.h"
 #include "DSP/EchoGuard.h"
 #include "DSP/ParametricEQ.h"
@@ -60,7 +60,9 @@ public:
     double getEngineSampleRate() const noexcept   { return engineRate.load(); }
 
     juce::AudioProcessorValueTreeState apvts;
-    onirique::PresetManager presets { apvts };
+    /** Les presets d'usine et ceux de l'utilisateur, la comparaison A/B : ce que montre la barre du haut. */
+    onirique::PresetBank presets { apvts, "Broadcast", onirique::broadcast::stockPresets(), onirique::broadcast::tagNames(),
+                                   onirique::broadcast::notStored() };
     onirique::SpectrumTap inputTap, outputTap;
 
     // ---- AudioProcessor (non utilisé comme plugin)

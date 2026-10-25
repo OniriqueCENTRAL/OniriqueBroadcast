@@ -133,7 +133,7 @@ void testEngine()
 {
     std::printf ("\nBroadcastEngine\n");
     BroadcastEngine e;
-    e.presets.loadByName ("Radio Broadcast");
+    e.presets.load ("Radio Broadcast");
     const double fs = 48000.0;
     e.prepareEngine (fs, 480);
     std::printf ("  latency: %d samples (%.2f ms)\n", e.getProcessingLatencySamples(), 1000.0 * e.getProcessingLatencySamples() / fs);
@@ -225,10 +225,15 @@ void testPresetLevels()
 {
     std::printf ("\nPreset output levels (speech-like input, -20 dBFS RMS)\n");
     const double fs = 48000.0;
-    for (auto& entry : BroadcastEngine().presets.list())
+    {
+        const auto problems = BroadcastEngine().presets.checkStock();
+        for (const auto& pb : problems) std::printf ("    %s\n", pb.toRawUTF8());
+        check (problems.isEmpty(), "factory presets: every parameter exists, every value in range");
+    }
+    for (const auto& name : BroadcastEngine().presets.getStockNames())
     {
         BroadcastEngine e;
-        e.presets.load (entry);
+        e.presets.load (name);
         e.prepareEngine (fs, 480);
         juce::Random rnd (3);
         std::vector<float> buf (480);
@@ -257,7 +262,7 @@ void testPresetLevels()
                 for (float s : buf) { accOut += (double) s * s; pkOut = std::max (pkOut, std::abs (s)); }
         }
         const double rmsIn = std::sqrt (accIn / (double) n), rmsOut = std::sqrt (accOut / (480.0 * 1199.0));
-        std::printf ("  %-18s in %6.1f dBFS RMS  ->  out %6.1f dBFS RMS, peak %6.1f dBFS\n", entry.name.toRawUTF8(),
+        std::printf ("  %-18s in %6.1f dBFS RMS  ->  out %6.1f dBFS RMS, peak %6.1f dBFS\n", name.toRawUTF8(),
                      juce::Decibels::gainToDecibels ((float) rmsIn), juce::Decibels::gainToDecibels ((float) rmsOut),
                      juce::Decibels::gainToDecibels (pkOut));
     }
@@ -289,7 +294,7 @@ void testEchoGuard()
     {
         const double fs = 48000.0;
         BroadcastEngine e;
-        e.presets.loadByName ("Streamer Clean");
+        e.presets.load ("Streamer Clean");
         setParam (e, onirique::ids::gateGuard, guard ? 1.0f : 0.0f);
         e.prepareEngine (fs, 480);
 

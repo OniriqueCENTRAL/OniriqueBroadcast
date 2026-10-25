@@ -21,6 +21,8 @@ BroadcastEngine::BroadcastEngine()
     dry.assign ((size_t) kChunk, 0.0f);
     raw.assign ((size_t) kChunk, 0.0f);
     wet.assign ((size_t) kChunk, 0.0f);
+    apvts.state.setProperty ("preset", "Init", nullptr);   // l'état de départ : les valeurs par défaut
+    onirique::broadcast::importOldUserPresets (presets);
 }
 
 void BroadcastEngine::prepareEngine (double sampleRate, int)

@@ -97,14 +97,14 @@ MainComponent::MainComponent (BroadcastEngine& e, AudioRouter& r, juce::Properti
         animated.push_back (mbListen[(size_t) b].get());
     }
 
-    for (auto* c : std::initializer_list<juce::Component*> { &orderBar, &presetBar, &muteButton, &bypassButton,
+    for (auto* c : std::initializer_list<juce::Component*> { &orderBar, &muteButton,
                                                              &inputMenu, &outputMenu, &monitorMenu, &bufferMenu, &channelSel, &modeSel,
                                                              &inputBar, &monitorToggle, &copyButton, &cableButton, &soundButton, &renameButton, &fixButton,
                                                              &trayToggle, &autostartToggle,
                                                              &analyzer, &peqChip, &gateDisplay, &gateHystV, &guardToggle, &fetRatio, &vu1176,
                                                              &mbDisplay, &mbPresets, &deessGr, &satType, &limToggle, &limGr, &outMeter })
         addAndMakeVisible (c);
-    for (auto* a : std::initializer_list<Animated*> { &orderBar, &presetBar, &muteButton, &bypassButton,
+    for (auto* a : std::initializer_list<Animated*> { &orderBar, &muteButton,
                                                       &inputMenu, &outputMenu, &monitorMenu, &bufferMenu, &channelSel, &modeSel,
                                                       &inputBar, &monitorToggle, &copyButton, &cableButton, &soundButton, &renameButton, &fixButton,
                                                       &trayToggle, &autostartToggle,
@@ -126,9 +126,7 @@ MainComponent::MainComponent (BroadcastEngine& e, AudioRouter& r, juce::Properti
 
     muteButton.setTooltip ("Mute the virtual microphone: the apps receive clean silence (smooth fade, no click).");
     muteButton.setCaption ("MUTED");
-    bypassButton.setTooltip ("Bypass all the effects: the virtual mic receives your raw microphone.");
     muteAtt = std::make_unique<ButtonAttachment> (engine.apvts, ids::mute, muteButton);
-    bypassAtt = std::make_unique<ButtonAttachment> (engine.apvts, ids::bypass, bypassButton);
     monitorToggle.setTooltip ("Hear the processed voice in your headphones (what the apps receive). Note: like any sound played "
                               "by the PC, this monitor can be picked up by a Discord screen share with sound - the virtual mic itself never is.");
     monitorAtt = std::make_unique<ButtonAttachment> (engine.apvts, ids::monOn, monitorToggle);
@@ -220,7 +218,19 @@ MainComponent::MainComponent (BroadcastEngine& e, AudioRouter& r, juce::Properti
     autostartToggle.setToggleState (isAutostartEnabled(), juce::dontSendNotification);
     autostartToggle.onClick = [this] { setAutostart (autostartToggle.getToggleState()); };
 
+    // le titre (logo qui respire, ONIRIQUE BROADCAST) est dans la barre du haut : logo et lueur prêts une fois pour toutes
     logo = juce::ImageCache::getFromMemory (BinaryData::logo_png, BinaryData::logo_pngSize);
+    if (logo.isValid())
+    {
+        const int lh = 160, pad = lh / 4;
+        logo = logo.rescaled (juce::roundToInt ((float) lh * 985.0f / 895.0f), lh, juce::Graphics::highResamplingQuality);
+        juce::Image src (juce::Image::ARGB, logo.getWidth() + 2 * pad, logo.getHeight() + 2 * pad, true, juce::SoftwareImageType());
+        { juce::Graphics lg (src); lg.drawImageAt (logo, pad, pad); }
+        logoGlow = juce::Image (juce::Image::ARGB, src.getWidth(), src.getHeight(), true, juce::SoftwareImageType());
+        juce::ImageConvolutionKernel k (15);
+        k.createGaussianBlur ((float) lh / 22.0f);
+        k.applyToImage (logoGlow, src, src.getBounds());
+    }
 
     router.onStatusChanged = [this] { refreshStatus(); };
     router.onDeviceListChanged = [this] { refreshStatus(); };
@@ -238,6 +248,12 @@ MainComponent::MainComponent (BroadcastEngine& e, AudioRouter& r, juce::Properti
         }
     };
     addAndMakeVisible (veils);
+
+    // la barre du haut des plugins ONIRIQUE (presets, IN, A/B, copier / coller), au-dessus de tout ; la fenêtre a sa
+    // propre taille (son coin, son agrandissement) : le menu ⋯ ne la propose pas
+    addAndMakeVisible (bar);
+    bar.setWithoutZoom();
+    bar.setBrand (juce::roundToInt (titleWidth()), [this] (juce::Graphics& g, juce::Rectangle<float> area) { paintTitle (g, area); });
     refreshStatus();
     startTimerHz (60);
 }
@@ -423,7 +439,7 @@ void MainComponent::doRename (const juce::String& name)
 void MainComponent::mouseDown (const juce::MouseEvent& e)
 {
     // fond de l'en-tête (hors boutons) : on déplace la fenêtre
-    draggingWindow = e.eventComponent == this && e.position.y < 92.0f * scale();
+    draggingWindow = e.eventComponent == this && e.position.y < 108.0f * scale();
     if (draggingWindow && onWindowDrag) onWindowDrag (e, true);
 }
 
@@ -526,8 +542,9 @@ void MainComponent::timerCallback()
     const bool muted = engine.apvts.getRawParameterValue (ids::mute)->load() > 0.5f;
     ui::approach (onAir, status.output.active && status.input.active ? (muted ? 0.35f : 1.0f) : 0.0f, 0.1f);
 
-    // en-tête vivant : lueur du logo, signal qui parcourt la ligne, étoiles, ON AIR qui respire
-    repaint (logoRect.expanded (logoRect.getHeight() * 0.4f).getSmallestIntegerContainer());
+    // en-tête vivant : lueur du logo (dans la barre), signal qui parcourt la ligne, étoiles, ON AIR qui respire
+    if ((frame & 1) == 0)
+        bar.repaint (bar.getBrandArea().withY (0).withHeight (50).expanded (10, 0));
     repaint (signalRect.getSmallestIntegerContainer());
     repaint (onAirRect.getSmallestIntegerContainer().expanded (14));
     if ((frame & 1) == 0)
@@ -544,46 +561,24 @@ void MainComponent::resized()
 {
     const float u = scale();
     const float W = (float) getWidth(), H = (float) getHeight();
-    const float m = 20.0f * u, gap = 14.0f * u, top = 96.0f * u;
+    const float m = 20.0f * u, gap = 14.0f * u, top = 112.0f * u;
     auto place = [] (juce::Component& c, juce::Rectangle<float> r) { c.setBounds (r.toNearestInt()); };
     auto inner = [u] (juce::Rectangle<float> r) { return r.withTrimmedTop (40.0f * u).withTrimmedBottom (12.0f * u).reduced (14.0f * u, 0.0f); };
 
-    // ---- en-tête
-    logoRect = { 20.0f * u, 12.0f * u, 60.0f * u * 985.0f / 895.0f, 60.0f * u };
-    signalRect = { 0.0f, 80.0f * u, W, 12.0f * u };
-    place (bypassButton, juce::Rectangle<float> (122.0f * u, 40.0f * u).withRightX (W - m).withY (20.0f * u));
-    place (muteButton, juce::Rectangle<float> (150.0f * u, 44.0f * u).withRightX ((float) bypassButton.getX() - 10.0f * u).withY (18.0f * u));
-    place (presetBar, juce::Rectangle<float> (370.0f * u, 40.0f * u).withRightX ((float) muteButton.getX() - 14.0f * u).withY (20.0f * u));
-    onAirRect = juce::Rectangle<float> (150.0f * u, 40.0f * u).withRightX ((float) presetBar.getX() - 14.0f * u).withY (20.0f * u);
-    place (orderBar, { logoRect.getRight() + 16.0f * u, 54.0f * u, 470.0f * u, 19.0f * u });
+    // ---- en-tête : la barre du haut (le titre, les presets, IN, A/B), puis l'ordre de traitement, ON AIR et MUTE
+    bar.place (u, getLocalBounds());
+    signalRect = { 0.0f, 96.0f * u, W, 12.0f * u };
+    place (muteButton, juce::Rectangle<float> (150.0f * u, 38.0f * u).withRightX (W - m).withY (58.0f * u));
+    onAirRect = juce::Rectangle<float> (150.0f * u, 38.0f * u).withRightX ((float) muteButton.getX() - 12.0f * u).withY (58.0f * u);
+    place (orderBar, { m, 67.5f * u, 470.0f * u, 19.0f * u });
 
-    if (logo.isValid())
-    {
-        const int lh = juce::jlimit (16, 600, juce::roundToInt (logoRect.getHeight() * 2.0f));
-        logoScaled = logo.rescaled (juce::roundToInt ((float) lh * 985.0f / 895.0f), lh, juce::Graphics::highResamplingQuality);
-        const int pad = lh / 4;
-        juce::Image src (juce::Image::ARGB, logoScaled.getWidth() + 2 * pad, logoScaled.getHeight() + 2 * pad, true);
-        { juce::Graphics lg (src); lg.drawImageAt (logoScaled, pad, pad); }
-        logoGlow = juce::Image (juce::Image::ARGB, src.getWidth(), src.getHeight(), true);
-        juce::ImageConvolutionKernel k (15);
-        k.createGaussianBlur ((float) lh / 22.0f);
-        k.applyToImage (logoGlow, src, src.getBounds());
-    }
-
-    // fin du titre + sous-titre (les étoiles commencent après)
-    {
-        const auto f1 = ui::font (ui::Face::display, 29.0f * u, true, 0.10f), f2 = ui::font (ui::Face::display, 29.0f * u, false, 0.10f);
-        const auto f3 = ui::font (ui::Face::mono, 10.0f * u, false, 0.12f);
-        headerTextRight = logoRect.getRight() + 14.0f * u + ui::textWidth (f1, "ONIRIQUE") + 2.0f + 10.0f * u
-                          + ui::textWidth (f2, "BROADCAST") + 2.0f + 22.0f * u + ui::textWidth (f3, "REAL-TIME VOICE CHAIN + VIRTUAL MIC");
-    }
     stars.clear();
     juce::Random rnd (7);
     for (int i = 0; i < 10; ++i)
     {
-        const float x0 = std::max ((float) orderBar.getRight(), headerTextRight) + 24.0f * u, x1 = onAirRect.getX() - 16.0f * u;
+        const float x0 = (float) orderBar.getRight() + 24.0f * u, x1 = onAirRect.getX() - 16.0f * u;
         const float x = x0 + (x1 - x0) * rnd.nextFloat();
-        const float y = (10.0f + 62.0f * rnd.nextFloat()) * u;
+        const float y = (58.0f + 36.0f * rnd.nextFloat()) * u;
         stars.push_back ({ { x, y }, (2.5f + 4.5f * rnd.nextFloat() * rnd.nextFloat()) * u });
     }
 
@@ -805,6 +800,59 @@ void MainComponent::paintStar (juce::Graphics& g, juce::Point<float> c, float r,
     g.fillPath (s);
 }
 
+// Le titre tel qu'il était en tête de la fenêtre (logo à la lueur braise qui respire, ONIRIQUE BROADCAST et ce que fait
+// l'application), dans la barre du haut : x et y de l'ancien en-tête, ramenés dans la zone de la marque (en points).
+namespace
+{
+constexpr float kTitleScale = 0.62f, kOldCentreY = 38.0f, kOldLogoX = 20.0f, kSubtitleSize = 8.5f;
+const float kOldLogoW = 60.0f * 985.0f / 895.0f;
+const char* kSubtitle = "REAL-TIME VOICE CHAIN + VIRTUAL MIC";
+}
+
+float MainComponent::titleWidth() const
+{
+    const float k = kTitleScale;
+    const auto f1 = ui::font (ui::Face::display, 29.0f * k, true, 0.10f), f2 = ui::font (ui::Face::display, 29.0f * k, false, 0.10f);
+    return (kOldLogoW + 14.0f) * k + ui::textWidth (f1, "ONIRIQUE") + 2.0f + 10.0f * k + ui::textWidth (f2, "BROADCAST") + 2.0f
+           + 16.0f + ui::textWidth (ui::font (ui::Face::mono, kSubtitleSize, false, 0.12f), kSubtitle) + 6.0f;
+}
+
+void MainComponent::paintTitle (juce::Graphics& g, juce::Rectangle<float> area) const
+{
+    const float k = kTitleScale;
+    auto X = [&] (float oldX) { return area.getX() + (oldX - kOldLogoX) * k; };
+    auto Y = [k] (float oldY) { return 25.0f + (oldY - kOldCentreY) * k; };
+
+    const auto logoRect = juce::Rectangle<float> (X (kOldLogoX), Y (12.0f), kOldLogoW * k, 60.0f * k);
+    if (logo.isValid())
+    {
+        const float breathe = 0.5f + 0.5f * std::sin ((float) clock * 2.0f * kPi / 5.0f);
+        const float pad = logoRect.getHeight() / 4.0f;
+        g.setImageResamplingQuality (juce::Graphics::highResamplingQuality);
+        g.setColour (ui::ember.withAlpha (0.55f + 0.35f * breathe));
+        g.drawImage (logoGlow, logoRect.expanded (pad), juce::RectanglePlacement::stretchToFit, true);
+        g.setColour (juce::Colours::white.withAlpha (0.08f + 0.10f * breathe));
+        g.drawImage (logoGlow, logoRect.expanded (pad), juce::RectanglePlacement::stretchToFit, true);
+        g.setOpacity (1.0f);
+        g.drawImage (logo, logoRect, juce::RectanglePlacement::stretchToFit);
+    }
+
+    const float x = logoRect.getRight() + 14.0f * k;
+    auto f1 = ui::font (ui::Face::display, 29.0f * k, true, 0.10f);
+    auto f2 = ui::font (ui::Face::display, 29.0f * k, false, 0.10f);
+    const float w1 = ui::textWidth (f1, "ONIRIQUE") + 2.0f;
+    const float w2 = ui::textWidth (f2, "BROADCAST") + 2.0f;
+    const float y = Y (12.0f), hh = 36.0f * k;
+    g.setFont (f1);
+    g.setColour (ui::mist);
+    g.drawText ("ONIRIQUE", juce::Rectangle<float> (x, y, w1, hh), juce::Justification::centredLeft, false);
+    g.setColour (ui::ember);
+    g.drawText ("BROADCAST", juce::Rectangle<float> (x + w1 + 10.0f * k, y, w2 + 30.0f * k, hh), juce::Justification::centredLeft, false);
+    g.setColour (ui::haze.withAlpha (0.7f));
+    g.setFont (ui::font (ui::Face::mono, kSubtitleSize, false, 0.12f));
+    g.drawText (kSubtitle, juce::Rectangle<float> (x + w1 + 10.0f * k + w2 + 16.0f, y + 2.0f, 260.0f, hh), juce::Justification::centredLeft, false);
+}
+
 void MainComponent::paintHeader (juce::Graphics& g)
 {
     const float u = scale();
@@ -815,39 +863,6 @@ void MainComponent::paintHeader (juce::Graphics& g)
     {
         const float a = 0.15f + 0.75f * (0.5f + 0.5f * std::sin (t * (0.9f + 0.37f * (float) (i % 5)) + (float) i * 1.7f));
         paintStar (g, stars[i].first, stars[i].second, a);
-    }
-
-    // logo : lueur braise qui respire + sigil net
-    if (logoScaled.isValid())
-    {
-        const float breathe = 0.5f + 0.5f * std::sin (t * 2.0f * kPi / 5.0f);
-        const float pad = logoRect.getHeight() / 4.0f;
-        g.setImageResamplingQuality (juce::Graphics::highResamplingQuality);
-        g.setColour (ui::ember.withAlpha (0.55f + 0.35f * breathe));
-        g.drawImage (logoGlow, logoRect.expanded (pad), juce::RectanglePlacement::stretchToFit, true);
-        g.setColour (juce::Colours::white.withAlpha (0.08f + 0.10f * breathe));
-        g.drawImage (logoGlow, logoRect.expanded (pad), juce::RectanglePlacement::stretchToFit, true);
-        g.setOpacity (1.0f);
-        g.drawImage (logoScaled, logoRect, juce::RectanglePlacement::stretchToFit);
-    }
-
-    // titre
-    {
-        const float x = logoRect.getRight() + 14.0f * u;
-        auto f1 = ui::font (ui::Face::display, 29.0f * u, true, 0.10f);
-        auto f2 = ui::font (ui::Face::display, 29.0f * u, false, 0.10f);
-        const float w1 = ui::textWidth (f1, "ONIRIQUE") + 2.0f;
-        const float w2 = ui::textWidth (f2, "BROADCAST") + 2.0f;
-        const float y = 12.0f * u, hh = 36.0f * u;
-        g.setFont (f1);
-        g.setColour (ui::mist);
-        g.drawText ("ONIRIQUE", juce::Rectangle<float> (x, y, w1, hh), juce::Justification::centredLeft, false);
-        g.setColour (ui::ember);
-        g.drawText ("BROADCAST", juce::Rectangle<float> (x + w1 + 10.0f * u, y, w2 + 30.0f * u, hh), juce::Justification::centredLeft, false);
-        g.setColour (ui::haze.withAlpha (0.7f));
-        g.setFont (ui::font (ui::Face::mono, 10.0f * u, false, 0.12f));
-        g.drawText ("REAL-TIME VOICE CHAIN + VIRTUAL MIC", juce::Rectangle<float> (x + w1 + w2 + 22.0f * u, y + 4.0f * u, 300.0f * u, hh),
-                    juce::Justification::centredLeft, false);
     }
 
     // ON AIR : enseigne lumineuse qui respire quand le micro virtuel émet
@@ -881,7 +896,7 @@ void MainComponent::paintHeader (juce::Graphics& g)
 
     // ligne de signal : filet qui s'estompe aux bords + impulsion lumineuse qui la parcourt
     {
-        const float ly = 84.0f * u;
+        const float ly = 102.0f * u;
         juce::ColourGradient cg (juce::Colours::transparentBlack, 20.0f * u, ly, juce::Colours::transparentBlack, W - 20.0f * u, ly, false);
         cg.addColour (0.08, ui::line);
         cg.addColour (0.92, ui::line);

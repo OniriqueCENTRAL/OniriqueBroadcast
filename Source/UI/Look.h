@@ -22,7 +22,7 @@ inline const juce::Colour live   { 0xff3BD98A };   // vert "en ligne" (statut du
 inline const juce::Colour line   { (juce::uint8) 255, (juce::uint8) 214, (juce::uint8) 218, 0.10f };
 
 // largeur de référence de la fenêtre (toutes les dimensions sont exprimées pour cette largeur)
-constexpr float kBaseW = 1640.0f, kBaseH = 950.0f;
+constexpr float kBaseW = 1640.0f, kBaseH = 966.0f;   // 966 : la barre du haut (presets) au-dessus de l'en-tête
 
 // Polices : display (titres), body (libellés), mono (valeurs) : Unbounded, Hanken Grotesk et JetBrains Mono, les polices
 // du site ONIRIQUE (dans les ressources de l'application). Chargées par FontScope (une par fenêtre ouverte : rien de
